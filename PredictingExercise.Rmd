@@ -1,0 +1,103 @@
+---
+title: "Exercise Prediction"
+author: "alikasapoglu"
+date: "July 27, 2019"
+output:
+  html_document: default
+  pdf_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Predicting the Exercise Type
+## Background
+Using devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible to collect a large amount of data about personal activity relatively inexpensively. These type of devices are part of the quantified self movement – a group of enthusiasts who take measurements about themselves regularly to improve their health, to find patterns in their behavior, or because they are tech geeks.
+
+One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it. In this project, your goal will be to use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants.
+
+The goal of the project is to predict the manner in which they did the exercise. This is the "classe" variable in the training set. You may use any of the other variables to predict with. 
+
+## 1. Prepare Data
+
+```{r loadlib, echo=T, results='hide', message=F, warning=F}
+library(caret)
+library(rpart) 
+library(randomForest)
+```
+
+
+### Download Data
+```{r downloaddata}
+trainUrl <- "http://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv"
+testUrl <- "http://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv"
+
+data_raw <- read.csv(url(trainUrl), na.strings=c("NA","#DIV/0!",""))
+data_test <- read.csv(url(testUrl), na.strings=c("NA","#DIV/0!",""))
+
+data <- data_raw
+```
+
+### Clear Data
+Let's first remove the columns which we know that they are not effecting 'classe' variable
+
+```{r removeunnecessary}
+tempcolnames <- grep("name|timestamp|window|X", colnames(data), value=F) 
+data <- data[,-tempcolnames]
+rm("tempcolnames")
+```
+
+Then let's remove the columns which have too much NA values. I've defined treshold as 75% for this.
+```{r removetoomanyNA}
+treshold <- nrow(data)*0.75
+okCols <- names(data[,colSums(is.na(data)) < treshold] )
+data <- data[,okCols]
+rm(okCols)
+dim(data)
+```
+
+Lastly I'd like to remove the variables near zero variance, but I couldnt find any :)
+```{r nzv}
+NZV <- nearZeroVar(data, saveMetrics=TRUE)
+sum(NZV$nzv)
+```
+
+
+### Split Data for Train and Validation
+```{r splitdata}
+set.seed(142) # for reproducibility
+totrain <- createDataPartition(y=data$classe,p=.70,list=F)
+data_train <- data[totrain,]
+data_mytest <- data[-totrain,]
+rm(totrain)
+```
+
+
+## 2. Decision Tree
+```{r decisiontree}
+modelDT <- rpart(data_train$classe ~ ., data=data_train, method="class")
+
+predDT <- predict(modelDT, data_mytest, type = "class")
+confusionMatrix(predDT, data_mytest$classe)
+confusionMatrix(predDT, data_mytest$classe)$overall[1]
+```
+
+## 3. Random Forest
+```{r randomforest}
+modelRF <- randomForest(data_train$classe ~ .,   data=data_train, do.trace=F)
+print(modelRF) # view results 
+
+predRF <- predict(modelRF, data_mytest, type = "class")
+confusionMatrix(predRF, data_mytest$classe)
+confusionMatrix(predRF, data_mytest$classe)$overall[1]
+```
+
+Comparing the accuracy values of Decision Tree model and Random Forest model, we see that Random Forest works way better. Therefore, for predicting the given test data, we use the model we created by random forest method.
+
+## 4. Predict the Given Test Data
+```{r predTestdata}
+pred_test <- predict(modelRF, newdata = data_test, type="class")
+print(pred_test)
+```
+
